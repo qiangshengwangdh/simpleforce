@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -25,8 +26,10 @@ const (
 
 // Client is the main instance to access salesforce.
 type Client struct {
-	sessionID string
-	user      struct {
+	sessionID        string
+	expiresInSeconds uint
+	loginedAt        time.Time
+	user             struct {
 		id       string
 		name     string
 		fullName string
@@ -50,18 +53,18 @@ type QueryResult struct {
 
 // Expose sid to save in admin settings
 func (client *Client) GetSid() (sid string) {
-        return client.sessionID
+	return client.sessionID
 }
 
-//Expose Loc to save in admin settings
+// Expose Loc to save in admin settings
 func (client *Client) GetLoc() (loc string) {
 	return client.instanceURL
 }
 
 // Set SID and Loc as a means to log in without LoginPassword
 func (client *Client) SetSidLoc(sid string, loc string) {
-        client.sessionID = sid
-        client.instanceURL = loc
+	client.sessionID = sid
+	client.instanceURL = loc
 }
 
 // Query runs an SOQL query. q could either be the SOQL string or the nextRecordsURL.
@@ -198,13 +201,14 @@ func (client *Client) LoginPassword(username, password, token string) error {
 	}
 
 	var loginResponse struct {
-		XMLName      xml.Name `xml:"Envelope"`
-		ServerURL    string   `xml:"Body>loginResponse>result>serverUrl"`
-		SessionID    string   `xml:"Body>loginResponse>result>sessionId"`
-		UserID       string   `xml:"Body>loginResponse>result>userId"`
-		UserEmail    string   `xml:"Body>loginResponse>result>userInfo>userEmail"`
-		UserFullName string   `xml:"Body>loginResponse>result>userInfo>userFullName"`
-		UserName     string   `xml:"Body>loginResponse>result>userInfo>userName"`
+		XMLName          xml.Name `xml:"Envelope"`
+		ServerURL        string   `xml:"Body>loginResponse>result>serverUrl"`
+		SessionID        string   `xml:"Body>loginResponse>result>sessionId"`
+		UserID           string   `xml:"Body>loginResponse>result>userId"`
+		UserEmail        string   `xml:"Body>loginResponse>result>userInfo>userEmail"`
+		UserFullName     string   `xml:"Body>loginResponse>result>userInfo>userFullName"`
+		UserName         string   `xml:"Body>loginResponse>result>userInfo>userName"`
+		ExpiresInSeconds uint     `xml:"Body>loginResponse>result>userInfo>sessionSecondsValid"`
 	}
 
 	err = xml.Unmarshal(respData, &loginResponse)
@@ -215,11 +219,13 @@ func (client *Client) LoginPassword(username, password, token string) error {
 
 	// Now we should all be good and the sessionID can be used to talk to salesforce further.
 	client.sessionID = loginResponse.SessionID
+	client.expiresInSeconds = loginResponse.ExpiresInSeconds
 	client.instanceURL = parseHost(loginResponse.ServerURL)
 	client.user.id = loginResponse.UserID
 	client.user.name = loginResponse.UserName
 	client.user.email = loginResponse.UserEmail
 	client.user.fullName = loginResponse.UserFullName
+	client.loginedAt = time.Now()
 
 	log.Println(logPrefix, "User", client.user.name, "authenticated.")
 	return nil
@@ -332,7 +338,7 @@ func parseHost(input string) string {
 	return "Failed to parse URL input"
 }
 
-//Get the List of all available objects and their metadata for your organization's data
+// Get the List of all available objects and their metadata for your organization's data
 func (client *Client) DescribeGlobal() (*SObjectMeta, error) {
 	apiPath := fmt.Sprintf("/services/data/v%s/sobjects", client.apiVersion)
 	baseURL := strings.TrimRight(client.baseURL, "/")
@@ -362,4 +368,9 @@ func (client *Client) DescribeGlobal() (*SObjectMeta, error) {
 		return nil, err
 	}
 	return &meta, nil
+}
+
+func (client *Client) IsExipring() bool {
+	return time.Since(client.loginedAt).
+		Seconds()-float64(client.expiresInSeconds) < 30
 }
