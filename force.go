@@ -51,6 +51,19 @@ type QueryResult struct {
 	Records        []SObject `json:"records"`
 }
 
+type SessionID struct {
+	SessionID        string
+	ExpiresInSeconds uint
+}
+
+// Expose session id together with expires in senconds
+func (client *Client) GetSessionID() (sessionID *SessionID) {
+	return &SessionID{
+		SessionID:        client.sessionID,
+		ExpiresInSeconds: client.expiresInSeconds,
+	}
+}
+
 // Expose sid to save in admin settings
 func (client *Client) GetSid() (sid string) {
 	return client.sessionID
@@ -368,9 +381,4 @@ func (client *Client) DescribeGlobal() (*SObjectMeta, error) {
 		return nil, err
 	}
 	return &meta, nil
-}
-
-func (client *Client) IsExpiring() bool {
-	return time.Since(client.loginedAt).
-		Seconds()-float64(client.expiresInSeconds) < 30
 }
