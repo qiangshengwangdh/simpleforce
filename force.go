@@ -370,7 +370,7 @@ func (client *Client) DescribeGlobal() (*SObjectMeta, error) {
 	return &meta, nil
 }
 
-func (client *Client) IsExipring() bool {
+func (client *Client) IsExpiring() bool {
 	return time.Since(client.loginedAt).
 		Seconds()-float64(client.expiresInSeconds) < 30
 }
