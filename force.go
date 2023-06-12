@@ -51,16 +51,20 @@ type QueryResult struct {
 	Records        []SObject `json:"records"`
 }
 
-type SessionID struct {
+type Session struct {
+	InstanceURL      string
 	SessionID        string
 	ExpiresInSeconds uint
+	LoginAt          time.Time
 }
 
 // Expose session id together with expires in senconds
-func (client *Client) GetSessionID() (sessionID *SessionID) {
-	return &SessionID{
+func (client *Client) GetSession() (session *Session) {
+	return &Session{
 		SessionID:        client.sessionID,
 		ExpiresInSeconds: client.expiresInSeconds,
+		InstanceURL:      client.instanceURL,
+		LoginAt:          client.loginedAt,
 	}
 }
 
